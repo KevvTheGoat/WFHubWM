@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 import json
 import os
@@ -7,6 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+RELIC_REWARDS_URL = "https://drops.warframestat.us/data/relics.json"
 ITEMS_URL = "https://api.warframe.market/v2/items"
 STATS_URL_TEMPLATE = "https://api.warframe.market/v1/items/{slug}/statistics"
 OUTPUT_PATH = "warframe_market_wa_prices.json"
@@ -16,7 +18,7 @@ MAX_WORKERS = 3
 REQUEST_TIMEOUT = 20
 MAX_RETRIES = 4
 
-# Set TEST_LIMIT=10 in GitHub Actions or local env to only fetch first 10 items.
+# Set TEST_LIMIT=10 to only fetch the first 10 matched relic parts.
 TEST_LIMIT = int(os.getenv("TEST_LIMIT", "0") or "0")
 
 _last_request_at = 0.0
@@ -30,15 +32,15 @@ def rate_limited_get_json(url: str):
     if wait_for > 0:
         time.sleep(wait_for)
 
-    req = Request(
-        url,
-        headers={
-            "User-Agent": "wfhub-price-fetcher/1.0",
-            "Accept": "application/json",
-            "Platform": "pc",
-            "Language": "en",
-        },
-    )
+    headers = {
+        "User-Agent": "wfhub-relic-part-prices/1.0",
+        "Accept": "application/json",
+    }
+    if "warframe.market" in url:
+        headers["Platform"] = "pc"
+        headers["Language"] = "en"
+
+    req = Request(url, headers=headers)
 
     _last_request_at = time.monotonic()
     with urlopen(req, timeout=REQUEST_TIMEOUT) as resp:
@@ -56,12 +58,45 @@ def fetch_with_retries(url: str):
     raise RuntimeError(f"Failed after retries: {url} :: {last_error}")
 
 
+def normalize_name(value: str) -> str:
+    return " ".join(str(value or "").split()).strip().lower()
+
+
+def fetch_relic_part_names():
+    payload = fetch_with_retries(RELIC_REWARDS_URL)
+    relics = payload.get("relics") or []
+
+    part_names = set()
+    for relic in relics:
+        for reward in relic.get("rewards") or []:
+            item_name = reward.get("itemName")
+            if item_name:
+                part_names.add(normalize_name(item_name))
+
+    return part_names
+
+
 def fetch_items():
     payload = fetch_with_retries(ITEMS_URL)
-    items = payload.get("data") or payload.get("payload", {}).get("items") or []
+    return payload.get("data") or payload.get("payload", {}).get("items") or []
+
+
+def fetch_target_items():
+    relic_part_names = fetch_relic_part_names()
+    items = fetch_items()
+
+    matched = []
+    for item in items:
+        en_name = ((item.get("i18n") or {}).get("en") or {}).get("name")
+        if normalize_name(en_name) in relic_part_names:
+            matched.append(item)
+
+    matched.sort(key=lambda x: (((x.get("i18n") or {}).get("en") or {}).get("name") or "").lower())
+
     if TEST_LIMIT > 0:
-        items = items[:TEST_LIMIT]
-    return items
+        matched = matched[:TEST_LIMIT]
+
+    return matched
 
 
 def fetch_item_wa_price(slug: str):
@@ -74,12 +109,17 @@ def fetch_item_wa_price(slug: str):
 
 
 def main():
-    items = fetch_items()
+    items = fetch_target_items()
 
     result = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "source": "warframe.market",
+        "source": {
+            "relic_parts": RELIC_REWARDS_URL,
+            "market_items": ITEMS_URL,
+            "market_stats": "v1/items/{slug}/statistics",
+        },
         "test_limit": TEST_LIMIT,
+        "count": 0,
         "items": {},
     }
 
@@ -105,11 +145,14 @@ def main():
                 "wa_price": wa_price,
             }
 
+    result["count"] = len(result["items"])
+
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, separators=(",", ":"))
 
-    print(f"Wrote {len(result['items'])} items to {OUTPUT_PATH} (TEST_LIMIT={TEST_LIMIT})")
+    print(f"Wrote {result['count']} relic parts to {OUTPUT_PATH} (TEST_LIMIT={TEST_LIMIT})")
 
 
 if __name__ == "__main__":
     main()
+```
