@@ -22,7 +22,7 @@ jobs:
         env:
           TEST_LIMIT: 0
         run: |
-          TEST_LIMIT=10 python3 main.py
+          python3 main.py
 
       - name: Commit and push
         run: |
