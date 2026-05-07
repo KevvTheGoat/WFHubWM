@@ -1,0 +1,33 @@
+name: Update Warframe Market WA Prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 */7 * *"
+
+jobs:
+  update-wa-prices:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run price fetcher
+        env:
+          TEST_LIMIT: 0
+        run: |
+          TEST_LIMIT=10 python3 main.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add warframe_market_wa_prices.json
+          git commit -m "Force update warframe_market_wa_prices.json"
+          git push
