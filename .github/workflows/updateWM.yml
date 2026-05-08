@@ -24,6 +24,7 @@ jobs:
         run: |
           python3 main.py
           python3 warframe_set_price.py
+          python3 wm_item_zh.py
 
       - name: Commit and push
         run: |
@@ -31,5 +32,6 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add warframe_market_wa_prices.json
           git add warframe_market_set_wa_prices.json
+          git add items_zh.json
           git commit -m "Force update warframe_market_wa_prices.json"
           git push
