@@ -24,7 +24,7 @@ jobs:
         run: |
           python3 main.py
           python3 warframe_set_price.py
-          python3 wm_item_zh.py
+          python3 wm_items_zh.py
 
       - name: Commit and push
         run: |
