@@ -23,6 +23,7 @@ jobs:
           TEST_LIMIT: 0
         run: |
           python3 main.py
+          python3 warframe_set_price.py
 
       - name: Commit and push
         run: |
